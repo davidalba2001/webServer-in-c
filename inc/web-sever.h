@@ -1,4 +1,4 @@
-#define PORT 4600
+#define PORT 8013
 #define BUFFER_SIZE 1024
 #include <sys/socket.h>
 #include <stdlib.h>
@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <unistd.h>
+
 
 #define handle_error(msg)   \
     do                      \
@@ -17,13 +18,15 @@
 
 struct httpRequest
 {
-    char method[10];
+    char *method;
     char *uri;
-    char version[10];
+    char *version;
 };
 
 int pasiveSocket(struct sockaddr *host_addr, int host_addrlen);
-int childProcess(int sockfd, struct sockaddr *client_addr, socklen_t *client_addrlen);
+int childProcess(int sockfd,int client_fd, struct sockaddr *client_addr, socklen_t *client_addrlen,char* path);
 struct httpRequest *readRequest(int sockfd);
-char* processResponse(struct httpRequest* request);
+char *processResponse(struct httpRequest *request,char* path);
 int sendResponse(int sockfd, char *resp);
+
+char *createHTML(char *path);

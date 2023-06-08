@@ -1,4 +1,8 @@
 #include "../inc/web-sever.h"
+#include <sys/stat.h>
+#include <stdio.h>
+#include <dirent.h>
+#include <time.h>
 
 int main(int argc, char *argv[])
 {
@@ -42,7 +46,8 @@ int main(int argc, char *argv[])
             continue;
         }
         printf("connection accepted\n");
-        int childpid = childProcess(newsockfd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addrlen);
+
+        int childpid = childProcess(sock_fd,newsockfd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addrlen, argv[2]);
         if (childpid == -1)
         {
             printf("child fail forking");
@@ -73,16 +78,15 @@ int pasiveSocket(struct sockaddr *host_addr, int host_addrlen)
     printf("server listening for connections\n");
     return sock_fd;
 }
-int childProcess(int sockfd, struct sockaddr *client_addr, socklen_t *client_addrlen)
+int childProcess(int sock_fd, int client_fd, struct sockaddr *client_addr, socklen_t *client_addrlen, char *path)
 {
     pid_t childPid = fork();
     if (childPid == 0)
-    {
-        struct httpRequest *request = readRequest(sockfd);
-        printf("recok");
-        char *response = processResponse(request);
-
-        sendResponse(sockfd,response);
+    {   
+        struct httpRequest *request = readRequest(client_fd);
+        // printf("recok");
+        char *response = processResponse(request, path);
+        sendResponse(client_fd, response);
     }
     return childPid;
 }
@@ -110,64 +114,133 @@ struct httpRequest *readRequest(int sockfd)
     }
     // Info del Client
     printf("New Client [%s:%u]\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-    sscanf(buffer, "%s %s %s", request->method, request->uri, request->version);
+    // printf("request %s\n", buffer);
+    char *method = (char *)malloc(BUFFER_SIZE);
+    char *uri = (char *)malloc(BUFFER_SIZE);
+    char *version = (char *)malloc(BUFFER_SIZE);
+    sscanf(buffer, "%s %s %s", method, uri, version);
+    request->method = method;
+    request->uri = uri;
+    request->version = version;
+
+    // printf("Method:%s\n",request->method);
+    // printf("Uri %s\n", request->uri);
+    // printf("Version:%s\n", request->version);
     return request;
 }
 
-char *processResponse(struct httpRequest *request)
+char *processResponse(struct httpRequest *request, char *path)
 {
-    /* "HTTP/1.0 200 OK\r\n"
-                  "Server: webserver-c\r\n"
-                  "Content-type: text/html\r\n\r\n"
-                  "<html>hello, world</html>\r\n"*/
-
-    char *resp = (char *)malloc(BUFFER_SIZE*sizeof(char)); // Asigna memoria dinámicamente para el array
-    //sprintf(resp,);
-
+    char *buffer;
     if (strcmp(request->method, "GET") == 0)
     {
-        printf("Procces Get\n");
+        // printf("Procces GET\n");
+        // printf("Uri %s\n", request->uri);
+        // printf("Version:%s\n", request->version);
+        buffer = createHTML("/home");
     }
     else if (strcmp(request->method, "POST") == 0)
     {
-        printf("Procces POST\n");
+        buffer = createHTML("/home");
     }
     else
     {
-        printf("Procces ERROR\n");
+        buffer = createHTML("/home");
     }
-    return resp;
+    return buffer;
+}
+
+char *parseURI(char *URI)
+{
+}
+char *generateTable(char *path)
+{ // TODO: revisar algunas comprobaciones
+    char *buffer = (char *)malloc(BUFFER_SIZE * sizeof(char));
+
+    sprintf(buffer, "<table>");
+    strcat(buffer, "<tr><th>Name</th><th>Size</th><th>Date</th></tr>");
+
+    DIR *dir;
+    struct dirent *ent;
+    dir = opendir(path);
+
+    while ((ent = readdir(dir)) != NULL)
+    {
+        char *filepath = (char *)malloc(BUFFER_SIZE);
+        sprintf(filepath, path);
+        strcat(filepath, "/");
+        strcat(filepath, ent->d_name);
+        // printf("filepath %s\n", filepath);
+        strcat(buffer, "<tr>");
+
+        for (size_t j = 0; j < 3; j++)
+        {
+            // printf("Entto \" Forr %d\n", j);
+
+            struct stat fileInf;
+            stat(filepath, &fileInf);
+
+            if (j == 0)
+            {
+                strcat(buffer, "<td>");
+                strcat(buffer, "<a href=\"");
+                strcat(buffer, filepath);
+                strcat(buffer, "\">");
+                strcat(buffer, ent->d_name);
+                strcat(buffer, "</a>");
+                strcat(buffer, "</td>");
+            }
+            if (j == 1)
+            {
+                strcat(buffer, "<td>");
+                sprintf(buffer + strlen(buffer), "%ld", fileInf.st_size);
+                strcat(buffer, "</td>");
+            }
+            if (j == 2)
+            {
+                strcat(buffer, "<td>");
+                sprintf(buffer + strlen(buffer), "%s", ctime(&fileInf.st_mtime));
+                strcat(buffer, "</td>");
+            }
+        }
+        printf("final while");
+        free(filepath);
+        strcat(buffer, "</tr>");
+        // printf("buffer: %s\n",buffer);
+    }
+    strcat(buffer,"\0");
+    printf("buffer: %s\n", buffer);
+    return buffer;
+}
+
+char *HTTP_header(char *typecode, char *shortmsg)
+{
+    char *buffer = (char *)malloc(BUFFER_SIZE * sizeof(char));
+    sprintf(buffer,"HTTP/1.0 %s %s\r\n", typecode, shortmsg);
+    strcat(buffer, "Server: webserver-c\r\n");
+    strcat(buffer, "Content-type: text/html\r\n\r\n");
+    return buffer;
+}
+
+char *createHTML(char *path)
+{
+    char *header = HTTP_header("200", "OK");
+    // printf("Cabecera:%s\n",header);
+    char *table = generateTable(path);
+    char *buffer = (char *)malloc(BUFFER_SIZE * sizeof(char));
+    sprintf(buffer, header);
+    strcat(buffer, "<html><head></head><body>");
+    strcat(buffer, table);
+    strcat(buffer, "</body></html>");
+    return buffer;
 }
 
 int sendResponse(int sockfd, char *resp)
 {
-    printf("Send Response\n");
-    printf("resp:%s\n",resp);
     int valwrite = write(sockfd, resp, strlen(resp));
     if (valwrite == -1)
     {
         perror("webserver (write)");
     }
     return valwrite;
-}
-
-void funtest(struct httpRequest *request)
-{
-    /*printf("---------------------\n");
-    printf("|     Request       |\n");
-    printf("---------------------\n");
-    printf("%s\n",buffer);*/
-    
-    printf("---------------------\n");
-    printf("|      method       |\n");
-    printf("---------------------\n");
-    printf("%s\n",request->method);
-    printf("---------------------\n");
-    printf("|        Uri        |\n");
-    printf("---------------------\n");
-    printf("%s\n",request->uri);
-    printf("---------------------\n");
-    printf("|      version      |\n");
-    printf("---------------------\n");
-    printf("%s\n",request->version);
 }
