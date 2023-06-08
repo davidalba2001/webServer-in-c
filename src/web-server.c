@@ -78,17 +78,18 @@ int childProcess(int sockfd, struct sockaddr *client_addr, socklen_t *client_add
     pid_t childPid = fork();
     if (childPid == 0)
     {
-        struct httpRequest* request = readRequest(sockfd);
-        
-        // processResponse(request);
-        // sendResponse(sockfd, resp);
+        struct httpRequest *request = readRequest(sockfd);
+        printf("recok");
+        char *response = processResponse(request);
+
+        sendResponse(sockfd,response);
     }
     return childPid;
 }
-struct httpRequest* readRequest(int sockfd)
+struct httpRequest *readRequest(int sockfd)
 {
     char buffer[BUFFER_SIZE];
-    struct httpRequest *request = (struct httpRequest*) malloc(sizeof(struct httpRequest));
+    struct httpRequest *request = (struct httpRequest *)malloc(sizeof(struct httpRequest));
     // Create client address
     struct sockaddr_in client_addr;
     int client_addrlen = sizeof(client_addr);
@@ -102,19 +103,61 @@ struct httpRequest* readRequest(int sockfd)
     }
 
     int valread = read(sockfd, buffer, BUFFER_SIZE);
-    
+
     if (valread < 0)
     {
         perror("webserver (read)");
     }
     // Info del Client
     printf("New Client [%s:%u]\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+    sscanf(buffer, "%s %s %s", request->method, request->uri, request->version);
+    return request;
+}
 
-    printf("---------------------\n");
+char *processResponse(struct httpRequest *request)
+{
+    /* "HTTP/1.0 200 OK\r\n"
+                  "Server: webserver-c\r\n"
+                  "Content-type: text/html\r\n\r\n"
+                  "<html>hello, world</html>\r\n"*/
+
+    char *resp = (char *)malloc(BUFFER_SIZE*sizeof(char)); // Asigna memoria dinámicamente para el array
+    //sprintf(resp,);
+
+    if (strcmp(request->method, "GET") == 0)
+    {
+        printf("Procces Get\n");
+    }
+    else if (strcmp(request->method, "POST") == 0)
+    {
+        printf("Procces POST\n");
+    }
+    else
+    {
+        printf("Procces ERROR\n");
+    }
+    return resp;
+}
+
+int sendResponse(int sockfd, char *resp)
+{
+    printf("Send Response\n");
+    printf("resp:%s\n",resp);
+    int valwrite = write(sockfd, resp, strlen(resp));
+    if (valwrite == -1)
+    {
+        perror("webserver (write)");
+    }
+    return valwrite;
+}
+
+void funtest(struct httpRequest *request)
+{
+    /*printf("---------------------\n");
     printf("|     Request       |\n");
     printf("---------------------\n");
-    printf("%s\n",buffer);
-    sscanf(buffer, "%s %s %s", request->method, request->uri, request->version);
+    printf("%s\n",buffer);*/
+    
     printf("---------------------\n");
     printf("|      method       |\n");
     printf("---------------------\n");
@@ -127,7 +170,4 @@ struct httpRequest* readRequest(int sockfd)
     printf("|      version      |\n");
     printf("---------------------\n");
     printf("%s\n",request->version);
-
-
-    return request;
 }
