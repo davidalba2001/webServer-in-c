@@ -1,8 +1,8 @@
 #include "../inc/web-sever.h"
 
-int main(int argc,char*argv[])
+int main(int argc, char *argv[])
 {
-    #pragma region handle_Args
+#pragma region handle_Args
     int port;
     char path[500];
     if (argc < 3)
@@ -17,18 +17,18 @@ int main(int argc,char*argv[])
     }
     printf("Port: %d\n", port);
     printf("Path: %s\n", path);
-    #pragma endregion
-    #pragma region Variables
+#pragma endregion
+#pragma region Variables
     struct sockaddr_in host_addr;
     int host_addrlen = sizeof(host_addr);
 
     host_addr.sin_family = AF_INET;
     host_addr.sin_port = htons(port);
     host_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    
+
     struct sockaddr_in client_addr;
     int client_addrlen = sizeof(client_addr);
-    #pragma endregion
+#pragma endregion
 
     int sock_fd = pasiveSocket((struct sockaddr *)&host_addr, host_addrlen);
 
@@ -49,8 +49,6 @@ int main(int argc,char*argv[])
         }
         close(newsockfd);
     }
-    
-
 }
 int pasiveSocket(struct sockaddr *host_addr, int host_addrlen)
 {
@@ -80,10 +78,56 @@ int childProcess(int sockfd, struct sockaddr *client_addr, socklen_t *client_add
     pid_t childPid = fork();
     if (childPid == 0)
     {
-        printf("Procces New Client\n");
-        readRequest(sockfd);
-        //processResponse(request);
-        //sendResponse(sockfd, resp);
+        struct httpRequest* request = readRequest(sockfd);
+        
+        // processResponse(request);
+        // sendResponse(sockfd, resp);
     }
     return childPid;
+}
+struct httpRequest* readRequest(int sockfd)
+{
+    char buffer[BUFFER_SIZE];
+    struct httpRequest *request = (struct httpRequest*) malloc(sizeof(struct httpRequest));
+    // Create client address
+    struct sockaddr_in client_addr;
+    int client_addrlen = sizeof(client_addr);
+
+    // Get client address
+    int sockn = getsockname(sockfd, (struct sockaddr *)&client_addr,
+                            (socklen_t *)&client_addrlen);
+    if (sockn < 0)
+    {
+        perror("webserver (getsockname)");
+    }
+
+    int valread = read(sockfd, buffer, BUFFER_SIZE);
+    
+    if (valread < 0)
+    {
+        perror("webserver (read)");
+    }
+    // Info del Client
+    printf("New Client [%s:%u]\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+
+    printf("---------------------\n");
+    printf("|     Request       |\n");
+    printf("---------------------\n");
+    printf("%s\n",buffer);
+    sscanf(buffer, "%s %s %s", request->method, request->uri, request->version);
+    printf("---------------------\n");
+    printf("|      method       |\n");
+    printf("---------------------\n");
+    printf("%s\n",request->method);
+    printf("---------------------\n");
+    printf("|        Uri        |\n");
+    printf("---------------------\n");
+    printf("%s\n",request->uri);
+    printf("---------------------\n");
+    printf("|      version      |\n");
+    printf("---------------------\n");
+    printf("%s\n",request->version);
+
+
+    return request;
 }
