@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <libgen.h>
+#define PATH_TEMPLATE "../Template/filesDirectory.html"
 // #include "../inc/URI_parser.h"
 #define BUFFER_TABLE 1048576
 #ifndef URI_PARSER_H
@@ -83,7 +84,7 @@ int pasiveSocket(struct sockaddr *host_addr, int host_addrlen)
         handle_error("WebSever(socket)");
     }
     printf("socket created successfully\n");
-
+    
     if (bind(sock_fd, host_addr, host_addrlen) != 0)
     {
         handle_error("webserver (bind)");
@@ -113,6 +114,7 @@ int childProcess(int client_fd, struct sockaddr *client_addr, socklen_t *client_
         free(request);
     }
     return childPid;
+    // return 1;
 }
 struct httpRequest *readRequest(int sockfd)
 {
@@ -138,7 +140,7 @@ struct httpRequest *readRequest(int sockfd)
     }
     // Info del Client
     printf("New Client [%s:%u]\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-    //printf("request %s\n", buffer);
+    // printf("request %s\n", buffer);
 
     request->method = (char *)malloc(BUFFER_SIZE);
     request->uri = (char *)malloc(BUFFER_SIZE);
@@ -155,14 +157,14 @@ struct httpRequest *readRequest(int sockfd)
 
 char *processResponse(struct httpRequest *request, int sockfd, char *path)
 {
-    //printf("%s\n", request->button);
+    // printf("%s\n", request->button);
     printf("----------------------------------------------------------------------------------------\n");
     printf("[Methods|Uri|Button|Version]:[%s|%s|%s|%s]\n", request->method, request->uri, request->button, request->version);
     printf("----------------------------------------------------------------------------------------\n");
     char *buffer;
     char *uri = Uri_parser(request->uri);
-    //printf("%s\n", uri);
-    //printf("%s\n", request->button);
+    // printf("%s\n", uri);
+    // printf("%s\n", request->button);
     if (strcmp(request->method, "GET") == 0)
     {
         if (strcmp(uri, "/") == 0)
@@ -176,7 +178,7 @@ char *processResponse(struct httpRequest *request, int sockfd, char *path)
             if (S_ISDIR(folder.st_mode))
             {
 
-                buffer = createHTML(uri);
+                buffer = generateHTML(uri, PATH_TEMPLATE);
             }
             else
             {
@@ -191,12 +193,7 @@ char *processResponse(struct httpRequest *request, int sockfd, char *path)
     {
         if (strcmp(request->button, "root") == 0)
         {
-            buffer = createHTML(path);
-        }
-        if (strcmp(request->button, "previous") == 0)
-        {
-            // char *dir = parentDirectory(path)
-            // buffer = createHTML(path);
+            buffer = generateHTML(path, PATH_TEMPLATE);
         }
     }
     else
@@ -205,9 +202,6 @@ char *processResponse(struct httpRequest *request, int sockfd, char *path)
     return buffer;
 }
 
-char *parseURI(char *URI)
-{
-}
 char *generateTable(char *path)
 { // TODO: revisar algunas comprobaciones
     char *buffer = (char *)malloc(BUFFER_TABLE * sizeof(char));
@@ -283,41 +277,11 @@ char *HTTP_header(char *typecode, char *shortmsg)
     return buffer;
 }
 
-char *createHTML(char *path)
-{
-    printf("createHTML in path:%s\n", path);
-    char *button_root = "<form method=\"POST\" action=\"/submit\">\
-                   <input type =\"hidden\" name=\"action\" value=\" \">\
-                                 <button type =\"submit\" name=\"action\" value=\"root\">Root</button></form>";
-                                                //<button type =\"submit\" name=\"action\" value=\"previous\">Previous</button></form>";
-
-    char *button_previous = (char *)malloc(BUFFER_SIZE * sizeof(char *));
-    char *dirParent = parentDirectory(path);
-
-    sprintf(button_previous, "<a href=\"");
-    strcat(button_previous, dirParent);
-    strcat(button_previous, "\">");
-    strcat(button_previous, "Previous");
-    strcat(button_previous, "</a>");
-
-    char *header = HTTP_header("200", "OK");
-    char *table = generateTable(path);
-    char *buffer = (char *)malloc(BUFFER_TABLE * sizeof(char));
-    sprintf(buffer, header);
-    strcat(buffer, "<html><head></head><body>");
-    strcat(buffer, button_root);
-    strcat(buffer, button_previous);
-    strcat(buffer, table);
-    strcat(buffer, "</body></html>");
-    free(table);
-    free(button_previous);
-    free(dirParent);
-    return buffer;
-}
-
 int sendResponse(int sockfd, char *resp)
 {
-    int valwrite = write(sockfd, resp, strlen(resp));
+    char *header = HTTP_header("200", "OK");
+    int valwrite = write(sockfd, header, strlen(resp));
+    valwrite = write(sockfd, resp, strlen(resp));
     if (valwrite == -1)
     {
         perror("webserver (write)");
@@ -411,8 +375,8 @@ char *parentDirectory(char *path)
         return NULL;
     }
     char *dir = dirname(parent);
-    
-    char *result = (char *)malloc(BUFFER_SIZE*sizeof(char));
+
+    char *result = (char *)malloc(BUFFER_SIZE * sizeof(char));
     if (result == NULL)
     {
         perror("Error allocating memory");
@@ -423,19 +387,24 @@ char *parentDirectory(char *path)
     free(parent);
     return result;
 }
-int Download(int fd, char *filename, int size)
+void Download(int fd, char *filename, int size)
 {
     char *buff = calloc(1, 2048);
+    char *buff2 = calloc(1, 2048);
+    char *buff3 = calloc(1, 2048);
 
     sprintf(buff, "HTTP/1.1 200 OK\r\n");
-    sprintf(buff, "%sMIME-Version: 1.0\r\n", buff);
-    sprintf(buff, "%sContent-Type: application/octet-stream\r\n", buff);
-    sprintf(buff, "%sContent-Disposition: attacment; filename=\"%s\"\r\n", buff, strrchr(filename, '/') + 1);
-    sprintf(buff, "%sContent-Length: %ld \r\n\r\n", buff, size);
-
+    strcat(buff, "MIME-Version: 1.0\r\n");
+    strcat(buff, "Content-Type: application/octet-stream\r\n");
+    sprintf(buff2, "Content-Disposition: attacment;filename=\"%s\"\r\n", strrchr(filename, '/') + 1);
+    strcat(buff, buff2);
+    sprintf(buff3, "Content-Length: %d \r\n\r\n", size);
+    strcat(buff, buff3);
     write(fd, buff, strlen(buff));
 
     free(buff);
+    free(buff2);
+    free(buff3);
 
     int filefd = open(filename, O_RDONLY, 0);
     off_t offset = 0;
@@ -473,7 +442,6 @@ char *read_html_file(char *path)
         perror("Error opening file\n");
         return NULL;
     }
-
     char *buffer = (char *)malloc(BUFFER_SIZE * sizeof(char));
     if (buffer == NULL)
     {
@@ -496,18 +464,57 @@ char *read_html_file(char *path)
                 return NULL;
             }
         }
-        int valread = read(fileno(fp), buffer, BUFFER_SIZE);
+        int valread = read(fileno(fp), buffer + byte_read, BUFFER_SIZE);
         if (valread < 0)
         {
             perror("webserver (read)\n");
         }
-        if(valread == 0)
+        byte_read += valread;
+        if (valread == 0)
         {
-            byte_read += valread;
             break;
         }
     }
-    strcat(buffer,"\0");
+    strcat(buffer, "\0");
+   //printf("%s", buffer);
     fclose(fp);
     return buffer;
+}
+
+char *generateHTML(char *path, char *pathTemplate)
+{
+    char *buffer = malloc(BUFFER_SIZE * sizeof(char));
+    buffer = read_html_file(pathTemplate);
+    printf("%s", buffer);
+    char *strMark = malloc(25 * sizeof(char));
+    strMark = "<!--GenerateCode-->";
+
+    char *mark = malloc(BUFFER_SIZE * sizeof(char));
+    char *mark2 = malloc(BUFFER_SIZE * sizeof(char));
+    mark = strstr(buffer, strMark);
+    if (strMark == NULL)
+    {
+        printf(" El Template debe contener : <!--ContainInit-->.\n");
+    }
+
+    *(mark + strlen(strMark) + 1) = '\0';
+    mark2 = mark + strlen(strMark) + 2;
+    char *table = (char *)malloc(BUFFER_TABLE * sizeof(char));
+    table = generateTable(path);
+    char *html = (char *)malloc(BUFFER_TABLE * sizeof(char));
+    sprintf(html, buffer);
+    char *button_previous = (char *)malloc(BUFFER_SIZE * sizeof(char *));
+    char *dirParent = parentDirectory(path);
+    sprintf(button_previous, "<a href=\"");
+    strcat(button_previous, dirParent);
+    strcat(button_previous, "\" class=\"custom-button \">");
+    strcat(button_previous, "Previous");
+    strcat(button_previous, "</a>");
+    strcat(button_previous, "</div>");
+
+    strcat(html, button_previous);
+    strcat(html, table);
+    strcat(html, mark2);
+    printf("%s", html);
+    return html;
 }
