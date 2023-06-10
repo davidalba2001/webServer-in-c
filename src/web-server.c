@@ -464,3 +464,50 @@ int Download(int fd, char *filename, int size)
     write(fd, "\r\n", 2);
     close(filefd);
 }
+
+char *read_html_file(char *path)
+{
+    FILE *fp = fopen(path, "r");
+    if (fp == NULL)
+    {
+        perror("Error opening file\n");
+        return NULL;
+    }
+
+    char *buffer = (char *)malloc(BUFFER_SIZE * sizeof(char));
+    if (buffer == NULL)
+    {
+        perror("Error allocating memory\n");
+        fclose(fp);
+        return NULL;
+    }
+    int byte_read = 0;
+    int buffer_size = BUFFER_SIZE;
+    while (1)
+    {
+        if (byte_read + BUFFER_SIZE > buffer_size)
+        {
+            buffer_size *= 2;
+            buffer = (char *)realloc(buffer, buffer_size);
+            if (buffer == NULL)
+            {
+                perror("Error reallocating memory\n");
+                fclose(fp);
+                return NULL;
+            }
+        }
+        int valread = read(fileno(fp), buffer, BUFFER_SIZE);
+        if (valread < 0)
+        {
+            perror("webserver (read)\n");
+        }
+        if(valread == 0)
+        {
+            byte_read += valread;
+            break;
+        }
+    }
+    strcat(buffer,"\0");
+    fclose(fp);
+    return buffer;
+}
