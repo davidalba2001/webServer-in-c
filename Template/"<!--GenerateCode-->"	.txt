@@ -1,0 +1,19 @@
+<a href="/previous" class="custom-button">Previous</a>
+	</div>
+	<table>
+		<tr>
+			<th>Name</th>
+			<th>Size</th>
+			<th>Date</th>
+		</tr>
+		<tr>
+			<td><a href="/home/davidalba/documents/qtile.txt">qtile.txt</a></td>
+			<td>22177</td>
+			<td>Thu Apr 6 18:22:03 2023</td>
+		</tr>
+		<tr>
+			<td><a href="/home/davidalba/documents/tables">tables</a></td>
+			<td>4096</td>
+			<td>Wed Jun 7 14:53:23 2023</td>
+		</tr>
+	</table>
