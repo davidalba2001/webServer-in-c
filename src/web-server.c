@@ -5,6 +5,11 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <sys/sendfile.h>
+#include <signal.h>
+#include <fcntl.h>
+
 // #include "../inc/URI_parser.h"
 #define BUFFER_TABLE 1048576
 #ifndef URI_PARSER_H
@@ -31,7 +36,9 @@ int main(int argc, char *argv[])
     }
     printf("Port: %d\n", port);
     printf("Path: %s\n", path);
+
 #pragma endregion
+signal(SIGCHLD, SignHandlerKillChild);
 #pragma region Variables
     struct sockaddr_in host_addr;
     int host_addrlen = sizeof(host_addr);
@@ -96,7 +103,7 @@ int childProcess(int client_fd, struct sockaddr *client_addr, socklen_t *client_
     if (childPid == 0)
     {
         struct httpRequest *request = readRequest(client_fd);
-        char *response = processResponse(request, path);
+        char *response = processResponse(request,client_fd, path);
         sendResponse(client_fd, response);
         free(request->button);
         free(request->method);
@@ -145,7 +152,7 @@ struct httpRequest *readRequest(int sockfd)
     return request;
 }
 
-char *processResponse(struct httpRequest *request, char *path)
+char *processResponse(struct httpRequest *request,int sockfd,char *path)
 {
     printf("%s\n", request->button);
     printf("----------------------------------------------------------------------------------------\n");
@@ -172,7 +179,7 @@ char *processResponse(struct httpRequest *request, char *path)
             }
             else
             {
-                // Download(connected_fd, uri, folder.st_size);
+                Download(sockfd,uri,folder.st_size);
             }
         }
         else if (strstr(uri, path) != NULL)
@@ -181,10 +188,16 @@ char *processResponse(struct httpRequest *request, char *path)
     }
     else if (strcmp(request->method, "POST") == 0)
     {
+        if (strcmp(request->button, "root") == 0)
+        {
+            buffer = createHTML(path);
+        }
         if (strcmp(request->button, "previous") == 0)
         {
-            buffer = createHTML("/home");
+            //char *dir = parentDirectory(path)
+            //buffer = createHTML(path);
         }
+        
     }
     else
     {
@@ -283,8 +296,8 @@ char *createHTML(char *path)
     printf("createHTML in path:%s\n", path);
     char *booton = "<form method=\"POST\" action=\"/submit\">\
                    <input type =\"hidden\" name=\"action\" value=\" \">\
-                                 <button type =\"submit\" name=\"action\" value=\"previous\">Anterior</button>\
-                                                <button type =\"submit\" name=\"action\" value=\"next\">Siguiente</button></form>";
+                                 <button type =\"submit\" name=\"action\" value=\"root\">Root</button>\
+                                                <button type =\"submit\" name=\"action\" value=\"previous\">Previous</button></form>";
     char *header = HTTP_header("200", "OK");
     char *table = generateTable(path);
     char *buffer = (char *)malloc(BUFFER_TABLE * sizeof(char));
@@ -295,7 +308,6 @@ char *createHTML(char *path)
     strcat(buffer, "</body></html>");
     free(table);
     return buffer;
-
 }
 
 int sendResponse(int sockfd, char *resp)
@@ -374,9 +386,61 @@ char *readAction(char *request)
     char *action = strstr(request, "previous");
     if (action != NULL)
         return "previous";
-    //action = strstr(request, "next");
-    //if (action != NULL)
-        //return action;
+    action = strstr(request, "root");
+    if (action != NULL)
+        return "root";
     else
         return NULL;
+}
+void SignHandlerKillChild(int sig)
+{
+   while (waitpid(-1, 0, WNOHANG) > 0)
+      return;
+}
+char *parentDirectory(char *path)
+{
+    char *parentDir = dirname(&path);
+    printf("Parent directory of %s\n", parentDir);
+    return parentDir;
+}
+int Download(int fd, char *filename, int size)
+{
+   char *buff = calloc(1, 2048);
+
+   sprintf(buff, "HTTP/1.1 200 OK\r\n");
+   sprintf(buff, "%sMIME-Version: 1.0\r\n", buff);
+   sprintf(buff, "%sContent-Type: application/octet-stream\r\n", buff);
+   sprintf(buff, "%sContent-Disposition: attacment; filename=\"%s\"\r\n", buff, strrchr(filename, '/') + 1);
+   sprintf(buff, "%sContent-Length: %ld \r\n\r\n", buff, size);
+
+   write(fd, buff, strlen(buff));
+
+   free(buff);
+
+   int filefd = open(filename, O_RDONLY, 0);
+   off_t offset = 0;
+
+   while (size > 0)
+   {
+      int curr_size = size;
+      if (size > 2000000000)
+         curr_size = 2000000000;
+
+      if (sendfile(fd, filefd, &offset, curr_size) < 0)
+      {
+         if (errno == EINTR)
+         {
+            curr_size = 0;
+         }
+         else
+         {
+            printf("Error sending file");
+            return;
+         }
+      }
+      size -= curr_size;
+   }
+
+   write(fd, "\r\n", 2);
+   close(filefd);
 }
