@@ -2,8 +2,18 @@
 #include <sys/stat.h>
 #include <stdio.h>
 #include <dirent.h>
+#include <stdlib.h>
 #include <time.h>
+#include <string.h>
+// #include "../inc/URI_parser.h"
+#define BUFFER_TABLE 1048576
+#ifndef URI_PARSER_H
+#define URI_PARSER_H
 
+char *Uri_parser(char *uri);
+char HexaToDec(char *Hex);
+
+#endif
 int main(int argc, char *argv[])
 {
 #pragma region handle_Args
@@ -26,12 +36,14 @@ int main(int argc, char *argv[])
     struct sockaddr_in host_addr;
     int host_addrlen = sizeof(host_addr);
 
+    memset(&host_addr, 0, sizeof(host_addr));
     host_addr.sin_family = AF_INET;
     host_addr.sin_port = htons(port);
     host_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     struct sockaddr_in client_addr;
     int client_addrlen = sizeof(client_addr);
+
 #pragma endregion
 
     int sock_fd = pasiveSocket((struct sockaddr *)&host_addr, host_addrlen);
@@ -47,7 +59,7 @@ int main(int argc, char *argv[])
         }
         printf("connection accepted\n");
 
-        int childpid = childProcess(sock_fd,newsockfd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addrlen, argv[2]);
+        int childpid = childProcess(newsockfd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addrlen, path);
         if (childpid == -1)
         {
             printf("child fail forking");
@@ -78,15 +90,19 @@ int pasiveSocket(struct sockaddr *host_addr, int host_addrlen)
     printf("server listening for connections\n");
     return sock_fd;
 }
-int childProcess(int sock_fd, int client_fd, struct sockaddr *client_addr, socklen_t *client_addrlen, char *path)
+int childProcess(int client_fd, struct sockaddr *client_addr, socklen_t *client_addrlen, char *path)
 {
     pid_t childPid = fork();
     if (childPid == 0)
-    {   
+    {
         struct httpRequest *request = readRequest(client_fd);
-        // printf("recok");
         char *response = processResponse(request, path);
         sendResponse(client_fd, response);
+        free(request->button);
+        free(request->method);
+        free(request->uri);
+        free(request->version);
+        free(request);
     }
     return childPid;
 }
@@ -114,38 +130,64 @@ struct httpRequest *readRequest(int sockfd)
     }
     // Info del Client
     printf("New Client [%s:%u]\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-    // printf("request %s\n", buffer);
-    char *method = (char *)malloc(BUFFER_SIZE);
-    char *uri = (char *)malloc(BUFFER_SIZE);
-    char *version = (char *)malloc(BUFFER_SIZE);
-    sscanf(buffer, "%s %s %s", method, uri, version);
-    request->method = method;
-    request->uri = uri;
-    request->version = version;
+    printf("request %s\n", buffer);
 
-    // printf("Method:%s\n",request->method);
-    // printf("Uri %s\n", request->uri);
-    // printf("Version:%s\n", request->version);
+    request->method = (char *)malloc(BUFFER_SIZE);
+    request->uri = (char *)malloc(BUFFER_SIZE);
+    request->version = (char *)malloc(BUFFER_SIZE);
+    request->button = (char *)malloc(BUFFER_SIZE);
+    sscanf(buffer, "%s %s %s", request->method, request->uri, request->version);
+
+    if (strcmp(request->method, "POST") == 0)
+    {
+        strcpy(request->button, readAction(buffer));
+    }
     return request;
 }
 
 char *processResponse(struct httpRequest *request, char *path)
 {
+    printf("%s\n", request->button);
+    printf("----------------------------------------------------------------------------------------\n");
+    printf("[Methods|Uri|Button|Version]:[%s|%s|%s|%s]\n", request->method, request->uri, request->button, request->version);
+    printf("----------------------------------------------------------------------------------------\n");
     char *buffer;
+    char *uri = Uri_parser(request->uri);
+    printf("%s\n", uri);
+    printf("%s\n", request->button);
     if (strcmp(request->method, "GET") == 0)
     {
-        // printf("Procces GET\n");
-        // printf("Uri %s\n", request->uri);
-        // printf("Version:%s\n", request->version);
-        buffer = createHTML("/home");
+        if (strcmp(uri, "/") == 0)
+        {
+            uri = strcpy(uri, path);
+            printf("%s\n", uri);
+        }
+        struct stat folder;
+        if (stat(uri, &folder) == 0)
+        {
+            if (S_ISDIR(folder.st_mode))
+            {
+
+                buffer = createHTML(uri);
+            }
+            else
+            {
+                // Download(connected_fd, uri, folder.st_size);
+            }
+        }
+        else if (strstr(uri, path) != NULL)
+        {
+        }
     }
     else if (strcmp(request->method, "POST") == 0)
     {
-        buffer = createHTML("/home");
+        if (strcmp(request->button, "previous") == 0)
+        {
+            buffer = createHTML("/home");
+        }
     }
     else
     {
-        buffer = createHTML("/home");
     }
     return buffer;
 }
@@ -153,10 +195,10 @@ char *processResponse(struct httpRequest *request, char *path)
 char *parseURI(char *URI)
 {
 }
-char *generateTable(char *path)
+char *generateTable(char *path /*, char *back*/)
 { // TODO: revisar algunas comprobaciones
-    char *buffer = (char *)malloc(BUFFER_SIZE * sizeof(char));
-
+    char *buffer = (char *)malloc(BUFFER_TABLE * sizeof(char));
+    printf("path:%s\n", path);
     sprintf(buffer, "<table>");
     strcat(buffer, "<tr><th>Name</th><th>Size</th><th>Date</th></tr>");
 
@@ -164,21 +206,36 @@ char *generateTable(char *path)
     struct dirent *ent;
     dir = opendir(path);
 
+    strcat(buffer, "<td>");
+    strcat(buffer, "<a href=\"");
+    // strcat(buffer, back);
+    strcat(buffer, "\">");
+    strcat(buffer, "BACK");
+    strcat(buffer, "</a>");
+    strcat(buffer, "</td>");
+
     while ((ent = readdir(dir)) != NULL)
     {
         char *filepath = (char *)malloc(BUFFER_SIZE);
         sprintf(filepath, path);
         strcat(filepath, "/");
         strcat(filepath, ent->d_name);
-        // printf("filepath %s\n", filepath);
-        strcat(buffer, "<tr>");
+        if (strcmp(ent->d_name, ".") == 0)
+            continue;
+        if (strcmp(ent->d_name, "..") == 0)
+            continue;
 
+        // printf("filepath %s\n", filepath);
+
+        struct stat fileInf;
+        if (stat(filepath, &fileInf) < 0)
+            continue;
+
+        strcat(buffer, "<tr>");
         for (size_t j = 0; j < 3; j++)
         {
             // printf("Entto \" Forr %d\n", j);
-
-            struct stat fileInf;
-            stat(filepath, &fileInf);
+            // printf("LLEGO\n");
 
             if (j == 0)
             {
@@ -203,20 +260,19 @@ char *generateTable(char *path)
                 strcat(buffer, "</td>");
             }
         }
-        printf("final while");
         free(filepath);
         strcat(buffer, "</tr>");
         // printf("buffer: %s\n",buffer);
     }
-    strcat(buffer,"\0");
-    printf("buffer: %s\n", buffer);
+    strcat(buffer, "\0");
+    // printf("buffer: %s\n", buffer);
     return buffer;
 }
 
 char *HTTP_header(char *typecode, char *shortmsg)
 {
     char *buffer = (char *)malloc(BUFFER_SIZE * sizeof(char));
-    sprintf(buffer,"HTTP/1.0 %s %s\r\n", typecode, shortmsg);
+    sprintf(buffer, "HTTP/1.0 %s %s\r\n", typecode, shortmsg);
     strcat(buffer, "Server: webserver-c\r\n");
     strcat(buffer, "Content-type: text/html\r\n\r\n");
     return buffer;
@@ -224,15 +280,22 @@ char *HTTP_header(char *typecode, char *shortmsg)
 
 char *createHTML(char *path)
 {
+    printf("createHTML in path:%s\n", path);
+    char *booton = "<form method=\"POST\" action=\"/submit\">\
+                   <input type =\"hidden\" name=\"action\" value=\" \">\
+                                 <button type =\"submit\" name=\"action\" value=\"previous\">Anterior</button>\
+                                                <button type =\"submit\" name=\"action\" value=\"next\">Siguiente</button></form>";
     char *header = HTTP_header("200", "OK");
-    // printf("Cabecera:%s\n",header);
     char *table = generateTable(path);
-    char *buffer = (char *)malloc(BUFFER_SIZE * sizeof(char));
+    char *buffer = (char *)malloc(BUFFER_TABLE * sizeof(char));
     sprintf(buffer, header);
     strcat(buffer, "<html><head></head><body>");
+    strcat(buffer, booton);
     strcat(buffer, table);
     strcat(buffer, "</body></html>");
+    free(table);
     return buffer;
+
 }
 
 int sendResponse(int sockfd, char *resp)
@@ -243,4 +306,77 @@ int sendResponse(int sockfd, char *resp)
         perror("webserver (write)");
     }
     return valwrite;
+}
+
+char *Uri_parser(char *uri)
+{
+    char *ptr = uri;
+    char *result = calloc(1, strlen(uri));
+    char current_hex[3];
+    while ((ptr = strchr(ptr, '%')) != NULL)
+    {
+        *(ptr++) = '\0';
+        result = strcat(result, uri);
+        uri = ptr + 2;
+        strncpy(current_hex, ptr, 2);
+        char c1 = HexaToDec(current_hex);
+        result = strncat(result, &c1, 1);
+    }
+    strcat(result, uri);
+    return result;
+}
+char HexaToDec(char *Hex)
+{
+    int dec = 0;
+    int base = 1;
+    int len = strlen(Hex);
+    for (int i = len - 1; i >= 0; i--)
+    {
+        switch (Hex[i])
+        {
+        case 'A':
+        case 'a':
+            dec += 10 * base;
+            break;
+        case 'B':
+        case 'b':
+            dec += 11 * base;
+            break;
+        case 'C':
+        case 'c':
+            dec += 12 * base;
+            break;
+        case 'D':
+        case 'd':
+            dec += 13 * base;
+            break;
+        case 'E':
+        case 'e':
+            dec += 14 * base;
+            break;
+        case 'F':
+        case 'f':
+            dec += 15 * base;
+            break;
+        default:
+            dec += ((int)Hex[i] - 48) * base;
+            break;
+        }
+
+        base *= 16;
+    }
+    return (char)dec;
+}
+
+char *readAction(char *request)
+{
+
+    char *action = strstr(request, "previous");
+    if (action != NULL)
+        return "previous";
+    //action = strstr(request, "next");
+    //if (action != NULL)
+        //return action;
+    else
+        return NULL;
 }
