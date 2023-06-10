@@ -9,7 +9,7 @@
 #include <sys/sendfile.h>
 #include <signal.h>
 #include <fcntl.h>
-
+#include <libgen.h>
 // #include "../inc/URI_parser.h"
 #define BUFFER_TABLE 1048576
 #ifndef URI_PARSER_H
@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
     printf("Path: %s\n", path);
 
 #pragma endregion
-signal(SIGCHLD, SignHandlerKillChild);
+    signal(SIGCHLD, SignHandlerKillChild);
 #pragma region Variables
     struct sockaddr_in host_addr;
     int host_addrlen = sizeof(host_addr);
@@ -103,8 +103,9 @@ int childProcess(int client_fd, struct sockaddr *client_addr, socklen_t *client_
     if (childPid == 0)
     {
         struct httpRequest *request = readRequest(client_fd);
-        char *response = processResponse(request,client_fd, path);
+        char *response = processResponse(request, client_fd, path);
         sendResponse(client_fd, response);
+        free(response);
         free(request->button);
         free(request->method);
         free(request->uri);
@@ -137,7 +138,7 @@ struct httpRequest *readRequest(int sockfd)
     }
     // Info del Client
     printf("New Client [%s:%u]\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-    printf("request %s\n", buffer);
+    //printf("request %s\n", buffer);
 
     request->method = (char *)malloc(BUFFER_SIZE);
     request->uri = (char *)malloc(BUFFER_SIZE);
@@ -152,16 +153,16 @@ struct httpRequest *readRequest(int sockfd)
     return request;
 }
 
-char *processResponse(struct httpRequest *request,int sockfd,char *path)
+char *processResponse(struct httpRequest *request, int sockfd, char *path)
 {
-    printf("%s\n", request->button);
+    //printf("%s\n", request->button);
     printf("----------------------------------------------------------------------------------------\n");
     printf("[Methods|Uri|Button|Version]:[%s|%s|%s|%s]\n", request->method, request->uri, request->button, request->version);
     printf("----------------------------------------------------------------------------------------\n");
     char *buffer;
     char *uri = Uri_parser(request->uri);
-    printf("%s\n", uri);
-    printf("%s\n", request->button);
+    //printf("%s\n", uri);
+    //printf("%s\n", request->button);
     if (strcmp(request->method, "GET") == 0)
     {
         if (strcmp(uri, "/") == 0)
@@ -179,7 +180,7 @@ char *processResponse(struct httpRequest *request,int sockfd,char *path)
             }
             else
             {
-                Download(sockfd,uri,folder.st_size);
+                Download(sockfd, uri, folder.st_size);
             }
         }
         else if (strstr(uri, path) != NULL)
@@ -194,10 +195,9 @@ char *processResponse(struct httpRequest *request,int sockfd,char *path)
         }
         if (strcmp(request->button, "previous") == 0)
         {
-            //char *dir = parentDirectory(path)
-            //buffer = createHTML(path);
+            // char *dir = parentDirectory(path)
+            // buffer = createHTML(path);
         }
-        
     }
     else
     {
@@ -208,7 +208,7 @@ char *processResponse(struct httpRequest *request,int sockfd,char *path)
 char *parseURI(char *URI)
 {
 }
-char *generateTable(char *path /*, char *back*/)
+char *generateTable(char *path)
 { // TODO: revisar algunas comprobaciones
     char *buffer = (char *)malloc(BUFFER_TABLE * sizeof(char));
     printf("path:%s\n", path);
@@ -218,14 +218,6 @@ char *generateTable(char *path /*, char *back*/)
     DIR *dir;
     struct dirent *ent;
     dir = opendir(path);
-
-    strcat(buffer, "<td>");
-    strcat(buffer, "<a href=\"");
-    // strcat(buffer, back);
-    strcat(buffer, "\">");
-    strcat(buffer, "BACK");
-    strcat(buffer, "</a>");
-    strcat(buffer, "</td>");
 
     while ((ent = readdir(dir)) != NULL)
     {
@@ -294,19 +286,32 @@ char *HTTP_header(char *typecode, char *shortmsg)
 char *createHTML(char *path)
 {
     printf("createHTML in path:%s\n", path);
-    char *booton = "<form method=\"POST\" action=\"/submit\">\
+    char *button_root = "<form method=\"POST\" action=\"/submit\">\
                    <input type =\"hidden\" name=\"action\" value=\" \">\
-                                 <button type =\"submit\" name=\"action\" value=\"root\">Root</button>\
-                                                <button type =\"submit\" name=\"action\" value=\"previous\">Previous</button></form>";
+                                 <button type =\"submit\" name=\"action\" value=\"root\">Root</button></form>";
+                                                //<button type =\"submit\" name=\"action\" value=\"previous\">Previous</button></form>";
+
+    char *button_previous = (char *)malloc(BUFFER_SIZE * sizeof(char *));
+    char *dirParent = parentDirectory(path);
+
+    sprintf(button_previous, "<a href=\"");
+    strcat(button_previous, dirParent);
+    strcat(button_previous, "\">");
+    strcat(button_previous, "Previous");
+    strcat(button_previous, "</a>");
+
     char *header = HTTP_header("200", "OK");
     char *table = generateTable(path);
     char *buffer = (char *)malloc(BUFFER_TABLE * sizeof(char));
     sprintf(buffer, header);
     strcat(buffer, "<html><head></head><body>");
-    strcat(buffer, booton);
+    strcat(buffer, button_root);
+    strcat(buffer, button_previous);
     strcat(buffer, table);
     strcat(buffer, "</body></html>");
     free(table);
+    free(button_previous);
+    free(dirParent);
     return buffer;
 }
 
@@ -394,53 +399,68 @@ char *readAction(char *request)
 }
 void SignHandlerKillChild(int sig)
 {
-   while (waitpid(-1, 0, WNOHANG) > 0)
-      return;
+    while (waitpid(-1, 0, WNOHANG) > 0)
+        return;
 }
 char *parentDirectory(char *path)
 {
-    char *parentDir = dirname(&path);
-    printf("Parent directory of %s\n", parentDir);
-    return parentDir;
+    char *parent = strdup(path);
+    if (parent == NULL)
+    {
+        perror("Error allocating memory");
+        return NULL;
+    }
+    char *dir = dirname(parent);
+    
+    char *result = (char *)malloc(BUFFER_SIZE*sizeof(char));
+    if (result == NULL)
+    {
+        perror("Error allocating memory");
+        free(parent);
+        return NULL;
+    }
+    strcpy(result, dir);
+    free(parent);
+    return result;
 }
 int Download(int fd, char *filename, int size)
 {
-   char *buff = calloc(1, 2048);
+    char *buff = calloc(1, 2048);
 
-   sprintf(buff, "HTTP/1.1 200 OK\r\n");
-   sprintf(buff, "%sMIME-Version: 1.0\r\n", buff);
-   sprintf(buff, "%sContent-Type: application/octet-stream\r\n", buff);
-   sprintf(buff, "%sContent-Disposition: attacment; filename=\"%s\"\r\n", buff, strrchr(filename, '/') + 1);
-   sprintf(buff, "%sContent-Length: %ld \r\n\r\n", buff, size);
+    sprintf(buff, "HTTP/1.1 200 OK\r\n");
+    sprintf(buff, "%sMIME-Version: 1.0\r\n", buff);
+    sprintf(buff, "%sContent-Type: application/octet-stream\r\n", buff);
+    sprintf(buff, "%sContent-Disposition: attacment; filename=\"%s\"\r\n", buff, strrchr(filename, '/') + 1);
+    sprintf(buff, "%sContent-Length: %ld \r\n\r\n", buff, size);
 
-   write(fd, buff, strlen(buff));
+    write(fd, buff, strlen(buff));
 
-   free(buff);
+    free(buff);
 
-   int filefd = open(filename, O_RDONLY, 0);
-   off_t offset = 0;
+    int filefd = open(filename, O_RDONLY, 0);
+    off_t offset = 0;
 
-   while (size > 0)
-   {
-      int curr_size = size;
-      if (size > 2000000000)
-         curr_size = 2000000000;
+    while (size > 0)
+    {
+        int curr_size = size;
+        if (size > 2000000000)
+            curr_size = 2000000000;
 
-      if (sendfile(fd, filefd, &offset, curr_size) < 0)
-      {
-         if (errno == EINTR)
-         {
-            curr_size = 0;
-         }
-         else
-         {
-            printf("Error sending file");
-            return;
-         }
-      }
-      size -= curr_size;
-   }
+        if (sendfile(fd, filefd, &offset, curr_size) < 0)
+        {
+            if (errno == EINTR)
+            {
+                curr_size = 0;
+            }
+            else
+            {
+                printf("Error sending file");
+                return;
+            }
+        }
+        size -= curr_size;
+    }
 
-   write(fd, "\r\n", 2);
-   close(filefd);
+    write(fd, "\r\n", 2);
+    close(filefd);
 }
