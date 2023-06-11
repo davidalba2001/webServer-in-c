@@ -1,5 +1,3 @@
 /.vscode
-/temp
-/test
-/inc/web-server
-/src/web-server
+/bin
+/obj

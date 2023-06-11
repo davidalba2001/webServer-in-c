@@ -45,12 +45,13 @@
 			width: 100%;
 			margin: 0;
 		}
+
 		.button-container {
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
 			margin-top: 70px;
-			margin-bottom:-50px;
+			margin-bottom: -50px;
 			margin-left: auto;
 			margin-right: auto;
 			width: 80%;
@@ -147,14 +148,7 @@
 	</header>
 	<div class="button-container">
 		<form method="POST" action="/submit">
-			<input type="hidden" name="action" value="">
-			<button type="submit" id="root" class="custom-button">Root</button>
+			<input type="hidden" name="action" value="root">
+			<button type="submit" id="root" name="action" value="root" class="custom-button">Root</button>
 		</form>
-		<!--GenerateCode-->
-
-		<footer>
-			<p>&copy; 2023 Files Directory. All rights reserved.</p>
-		</footer>
-</body>
-
-</html>
+		<!--GenerateCode-->	

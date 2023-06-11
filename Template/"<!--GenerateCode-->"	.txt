@@ -21,6 +21,12 @@
 			<td>Wed Jun 7 14:53:23 2023</td>
 		</tr>
 	</table>
+<footer>
+			<p>&copy; 2023 Files Directory. All rights reserved.</p>
+		</footer>
+</body>
+
+</html>
 --------------------------------------------------------------------
 <!--GenerateCode--> del archivo Error 501
 --------------------------------------------------------------------
