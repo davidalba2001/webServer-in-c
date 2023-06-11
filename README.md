@@ -13,7 +13,7 @@
  ```
 >  Esta forma permite selecionar el puerto y el path de inicio 
 ```bash
-    make runArgs ARGS="<port> <path>"
+    make run ARGS="<port> <path>"
  ```
 > forma normal sin usar make
 ```bash

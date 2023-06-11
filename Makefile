@@ -28,8 +28,9 @@ clean :
 
 .PHONY: run
 run : 
-	@$(BIN_DIR)/webServer.out
-
-.PHONY: runArgs 
-runArgs : 
 	@$(BIN_DIR)/webServer.out $(ARGS)
+
+.PHONY: valg
+valg : 
+	valgrind --leak-check=yes $(BIN_DIR)/webServer.out $(ARGS)
+
