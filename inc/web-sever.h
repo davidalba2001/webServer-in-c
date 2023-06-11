@@ -1,4 +1,4 @@
-#define PORT 8072
+#define PORT 8079
 #define BUFFER_SIZE 1024
 #include <sys/socket.h>
 #include <stdlib.h>
@@ -34,3 +34,4 @@ char *parentDirectory(char *path);
 void SignHandlerKillChild(int sig);
 char *generateHTML(char *path, char *pathTemplate);
 void Download(int fd, char *filename, int size);
+char *response_error(char *typecode, char *shortmsg, char *path);

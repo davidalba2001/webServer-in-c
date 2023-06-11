@@ -84,7 +84,7 @@ int pasiveSocket(struct sockaddr *host_addr, int host_addrlen)
         handle_error("WebSever(socket)");
     }
     printf("socket created successfully\n");
-    
+
     if (bind(sock_fd, host_addr, host_addrlen) != 0)
     {
         handle_error("webserver (bind)");
@@ -187,17 +187,25 @@ char *processResponse(struct httpRequest *request, int sockfd, char *path)
         }
         else if (strstr(uri, path) != NULL)
         {
+            // error 404
+            buffer = response_error("404", "Not Found",path);
         }
     }
     else if (strcmp(request->method, "POST") == 0)
     {
         if (strcmp(request->button, "root") == 0)
         {
+            printf("%s", path);
             buffer = generateHTML(path, PATH_TEMPLATE);
+        }
+        else
+        {
+            buffer = response_error("501", "Not Implemented",path);
         }
     }
     else
     {
+        buffer = response_error("501", "Not Implemented",path);
     }
     return buffer;
 }
@@ -205,7 +213,7 @@ char *processResponse(struct httpRequest *request, int sockfd, char *path)
 char *generateTable(char *path)
 { // TODO: revisar algunas comprobaciones
     char *buffer = (char *)malloc(BUFFER_TABLE * sizeof(char));
-    printf("path:%s\n", path);
+    //printf("path:%s\n", path);
     sprintf(buffer, "<table>");
     strcat(buffer, "<tr><th>Name</th><th>Size</th><th>Date</th></tr>");
 
@@ -351,11 +359,7 @@ char HexaToDec(char *Hex)
 
 char *readAction(char *request)
 {
-
-    char *action = strstr(request, "previous");
-    if (action != NULL)
-        return "previous";
-    action = strstr(request, "root");
+    char *action = strstr(request, "root");
     if (action != NULL)
         return "root";
     else
@@ -476,7 +480,7 @@ char *read_html_file(char *path)
         }
     }
     strcat(buffer, "\0");
-   //printf("%s", buffer);
+    // printf("%s", buffer);
     fclose(fp);
     return buffer;
 }
@@ -485,7 +489,7 @@ char *generateHTML(char *path, char *pathTemplate)
 {
     char *buffer = malloc(BUFFER_SIZE * sizeof(char));
     buffer = read_html_file(pathTemplate);
-    printf("%s", buffer);
+    //printf("%s", buffer);
     char *strMark = malloc(25 * sizeof(char));
     strMark = "<!--GenerateCode-->";
 
@@ -499,8 +503,10 @@ char *generateHTML(char *path, char *pathTemplate)
 
     *(mark + strlen(strMark) + 1) = '\0';
     mark2 = mark + strlen(strMark) + 2;
+
     char *table = (char *)malloc(BUFFER_TABLE * sizeof(char));
     table = generateTable(path);
+
     char *html = (char *)malloc(BUFFER_TABLE * sizeof(char));
     sprintf(html, buffer);
     char *button_previous = (char *)malloc(BUFFER_SIZE * sizeof(char *));
@@ -511,10 +517,34 @@ char *generateHTML(char *path, char *pathTemplate)
     strcat(button_previous, "Previous");
     strcat(button_previous, "</a>");
     strcat(button_previous, "</div>");
-
     strcat(html, button_previous);
     strcat(html, table);
     strcat(html, mark2);
-    printf("%s", html);
+    //printf("%s", html);
     return html;
+}
+
+char *response_error(char *typecode, char *shortmsg, char *path)
+{
+    char *buffer = (char*)malloc(5000);
+
+    buffer = HTTP_header(typecode, shortmsg);
+
+    if (strcmp(typecode, "501"))
+    {
+        return strcat(buffer, read_html_file("Template/Error501.html"));
+    }
+
+    if (strcmp(typecode, "404"))
+    {
+        return strcat(buffer, read_html_file("Template/Error404.html"));
+    }
+
+    char *link = (char*)malloc(300);
+
+    sprintf(link, "<a href = \"%s\"></a>", path);
+    strcat(link, "</div></body></html>) ");
+    strcat(buffer,link);
+    free(link);
+    return buffer;
 }
