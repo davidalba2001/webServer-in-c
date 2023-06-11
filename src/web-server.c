@@ -191,7 +191,8 @@ char *processResponse(struct httpRequest *request, int sockfd, char *path)
             buffer = response_error("404", "Not Found",path);
         }
     }
-    else if (strcmp(request->method, "POST") == 0)
+    
+    else if (strcmp(request->method,"POST") == 0)
     {
         if (strcmp(request->button, "root") == 0)
         {

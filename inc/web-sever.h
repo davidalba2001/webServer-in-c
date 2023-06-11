@@ -1,4 +1,4 @@
-#define PORT 8079
+#define PORT 8087
 #define BUFFER_SIZE 1024
 #include <sys/socket.h>
 #include <stdlib.h>
